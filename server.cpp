@@ -80,8 +80,6 @@ void handleClient(int clientSocket) {
     else if (msg.rfind("exit",0) == 0) {
             std::string bye = "연결종료";
             send(clientSocket, bye.c_str(), bye.length(), 0);
-            close(clientSocket);
-            break;
         }
     else if (msg.rfind("이미 존재하는 사용자:",0)==0){
             std::string bye = "이미 존재하는 사용자 이름 입니다";

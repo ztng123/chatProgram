@@ -189,6 +189,35 @@ bool chat(string message) {
     }
 }
 
+void chatlog(){
+    try {
+        unique_ptr<sql::PreparedStatement> selectQuery(
+            con->prepareStatement("SELECT user_id FROM users WHERE username = ?")
+        );
+        selectQuery->setString(1, username);
+        unique_ptr<sql::ResultSet> res(selectQuery->executeQuery());
+
+        int user_id = -1;
+        if (res->next()) {
+            user_id = res->getInt("user_id");
+        } else {
+            cerr << "해당 username을 가진 사용자가 없습니다: " << username << endl;
+            
+        }
+        unique_ptr<sql::PreparedStatement> logQuery{
+            con->prepareStatement("SELECT content,sent_at FROM message_log WHERE sender_id = ? ORDER BY message_id DESC LIMIT 5")};
+        logQuery->setInt(1, user_id);
+        unique_ptr<sql::ResultSet> res2(logQuery->executeQuery());
+        while (res2->next()){
+            cout    << res2->getString("content") << " [ "
+                    << res2->getString("sent_at")<< " ]"<<endl;
+        }
+    }
+    catch (sql::SQLException& e) {
+        cerr << "채팅 불러오기 실패: " << e.what() << endl;
+    }
+}
+
 
 bool menu(int choice){
     if (choice == 1){
@@ -200,28 +229,37 @@ bool menu(int choice){
         cout << "비밀번호를 입력하세요 : " << endl;
         getline(cin, password);
         login(username,password);
-        cout << "---------------------" << endl;
-        cout << "1. 채팅하기 " << endl;
-        cout << "2. 로그아웃 " << endl;
-        cout << "3. 종료" << endl;
-        int n;
-        cin >> n;
-        cin.ignore();
-        if (n == 1)
-        {
-            while(true){
-                string message;
-                cout << "메시지를 입력하세요: ";
-                getline(cin, message);
-                if(!chat(message))break;
+        while(true){
+            cout << "---------------------" << endl;
+            cout << "1. 채팅하기 " << endl;
+            cout << "2. 로그아웃 " << endl;
+            cout << "3. 최근 대화내역 불러오기 " << endl;
+            cout << "4. 종료" << endl;
+            int n;
+            cin >> n;
+            cin.ignore();
+            if (n == 1)
+            {
+                while(true){
+                    string message;
+                    cout << "메시지를 입력하세요: ";
+                    getline(cin, message);
+                    if(!chat(message))break;
+                }
+                break;
             }
-        }
-        else if (n == 2){
-            chat("/exit");
-        }
-        else if (n == 3) return false;
-        else
-            cout << "잘못된 입력입니다 " << endl;
+            else if (n == 2){
+                chat("/exit");
+                break;
+            }
+            else if (n == 3){
+            chatlog();
+            }
+            else if (n == 4) return false;
+            else{
+                    cout << "잘못된 입력입니다 " << endl;
+                }
+            }
     }
     else if (choice == 3)
         return false;
