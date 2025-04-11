@@ -84,7 +84,11 @@ void handleClient(int clientSocket) {
     else if (msg.rfind("이미 존재하는 사용자:",0)==0){
             std::string bye = "이미 존재하는 사용자 이름 입니다";
             send(clientSocket, bye.c_str(), bye.length(), 0);
-    }    
+    }
+    else if (msg.rfind("로그인 실패:",0)==0){
+            std::string bye = "잘못된 회원정보를 입력하였습니다";
+            send(clientSocket, bye.c_str(), bye.length(), 0);
+    }
     else {
         std::string error = "Unknown Command";
         send(clientSocket, error.c_str(), error.length(), 0);

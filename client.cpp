@@ -20,6 +20,7 @@ std::unique_ptr<sql::Connection> con;
 string username, password;
 int clientSocket;
 bool run;
+bool logg = true;
 
 // thread 순서 조정이 어려워 일단 PASS
 
@@ -78,12 +79,12 @@ void join(){
         } 
         else {
             unique_ptr<sql::PreparedStatement> insertQuery(
-                con->prepareStatement("INSERT INTO users (username, password) VALUES (?, ?)")
+                con->prepareStatement("INSERT INTO users (username, password,status) VALUES (?, ?,?)")
             );
             insertQuery->setString(1, username);
             insertQuery->setString(2, password);
-
-            int result = insertQuery->executeUpdate();
+            insertQuery->setString(3, "로그아웃");
+            insertQuery->executeUpdate();
 
             string message = "REGISTER:" + username + ":" + password + ":";
             send(clientSocket, message.c_str(), static_cast<int>(message.length()), 0);
@@ -97,7 +98,7 @@ void join(){
 }
 
 
-void login(string username,string password){
+bool login(string username,string password){
     
     try {
         unique_ptr<sql::PreparedStatement> checkQuery(
@@ -127,22 +128,31 @@ void login(string username,string password){
                 con->prepareStatement("INSERT INTO user_sessions (user_id) VALUES(?)"));
             loginQuery->setInt(1, user_id);
             loginQuery->executeQuery();
+            unique_ptr<sql::PreparedStatement> updateQuery(
+                con->prepareStatement("UPDATE users SET status = ? WHERE username = ?"));
+            updateQuery->setString(1, "로그인 중");
+            updateQuery->setString(2, username);
+
+            updateQuery->executeUpdate();
             string message = "LOGIN:" + username + ":" + password;
             send(clientSocket, message.c_str(), static_cast<int>(message.length()), 0);
-        } 
+            receive();
+            return true;
+        }
         else {
             cout << "로그인 실패" << endl;
 
             string message = "로그인 실패:" + username + ":" + password + ":";
             send(clientSocket, message.c_str(), static_cast<int>(message.length()), 0);
+            receive();
+            return false;
         }
-        receive();
     }
     catch (sql::SQLException& e) {
         cerr << "SQL 예외 발생: " << e.what() << endl;
+        return false;
     }
 }
-
 
 bool chat(string message) {
     try {
@@ -164,6 +174,11 @@ bool chat(string message) {
                 con->prepareStatement("UPDATE user_sessions SET logout_time = NOW() WHERE user_id = ?"));
             exitQuery->setInt(1, user_id);
             exitQuery->executeUpdate();
+            unique_ptr<sql::PreparedStatement> updateQuery(
+                con->prepareStatement("UPDATE users SET status = ? WHERE username = ?"));
+            updateQuery->setString(1, "로그아웃");
+            updateQuery->setString(2, username);
+            updateQuery->executeUpdate();
             string byeMsg = "exit";
             send(clientSocket, byeMsg.c_str(), static_cast<int>(byeMsg.length()), 0);
             receive();
@@ -218,6 +233,31 @@ void chatlog(){
     }
 }
 
+void updateInfo(){
+    string pass;
+    cout << "현재 비밀번호를 입력하세요 : " << endl;
+    getline(cin, pass);
+    if (password == pass){
+        try
+        {
+            cout << "변경할 비밀번호를 입력하세요 : " << endl;
+            getline(cin, password);
+            unique_ptr<sql::PreparedStatement> updateQuery(
+                con->prepareStatement("UPDATE users SET password = ? WHERE username = ?"));
+            updateQuery->setString(1, password);
+            updateQuery->setString(2, username);
+
+            updateQuery->executeUpdate();
+            cout << "비밀번호 변경 완료" << endl;
+        }
+        catch (sql::SQLException& e) {
+            cerr << "insert failed" << e.what() << endl;
+        }
+    }
+    else {
+        cout << "비밀번호가 일치하지 않습니다" << endl;
+    }
+}
 
 bool menu(int choice){
     if (choice == 1){
@@ -228,13 +268,16 @@ bool menu(int choice){
         getline(cin, username);
         cout << "비밀번호를 입력하세요 : " << endl;
         getline(cin, password);
-        login(username,password);
-        while(true){
+        if(!login(username, password))
+            return true;
+        while (true)
+        {
             cout << "---------------------" << endl;
             cout << "1. 채팅하기 " << endl;
             cout << "2. 로그아웃 " << endl;
             cout << "3. 최근 대화내역 불러오기 " << endl;
-            cout << "4. 종료" << endl;
+            cout << "4. 비밀번호 변경" << endl;
+            cout << "5. 종료" << endl;
             int n;
             cin >> n;
             cin.ignore();
@@ -255,11 +298,13 @@ bool menu(int choice){
             else if (n == 3){
             chatlog();
             }
-            else if (n == 4) return false;
+            else if (n == 4)
+                updateInfo();
+            else if (n == 5) return false;
             else{
                     cout << "잘못된 입력입니다 " << endl;
                 }
-            }
+        }
     }
     else if (choice == 3)
         return false;
